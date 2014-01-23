@@ -1,0 +1,4 @@
+This scala project provides light-weight string literals for terminal escape codes.
+
+
+    println(esc"We \italic{wish you a \bold{merry} \blink{Christmas}} and a \Underline{happy} new year")
