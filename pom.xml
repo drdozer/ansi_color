@@ -15,7 +15,7 @@
     <name>Colors</name>
     <description>ANSI escape sequence formatting.</description>
     <inceptionYear>2013</inceptionYear>
-    <url>http://drdozer.github.com/colors</url>
+    <url>http://drdozer.github.com/ansi_colors</url>
 
     <developers>
         <developer>
@@ -41,7 +41,7 @@
 
     <issueManagement>
         <system>GitHub</system>
-        <url>http://github.com/drdozer/colors/issues</url>
+        <url>http://github.com/drdozer/ansi_colors/issues</url>
     </issueManagement>
 
     <dependencies>
@@ -116,13 +116,13 @@
     <distributionManagement>
         <site>
             <id>github-project-site</id>
-            <url>gitsite:git@github.com/drdozer/graphviz-s.git</url>
+            <url>gitsite:git@github.com/drdozer/ansi_colors.git</url>
         </site>
     </distributionManagement>
 
     <scm>
-        <developerConnection>scm:git:git://github.com/drdozer/colors.git</developerConnection>
-        <url>http://github.com/drdozer/colors</url>
+        <developerConnection>scm:git:git://github.com/drdozer/ansi_colors.git</developerConnection>
+        <url>http://github.com/drdozer/ansi_colors</url>
     </scm>
 
 </project>
