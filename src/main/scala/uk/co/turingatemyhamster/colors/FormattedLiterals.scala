@@ -5,18 +5,18 @@ import scala.util.parsing.combinator.RegexParsers
 /**
  * Created by nmrp3 on 22/12/13.
  */
-object Ansi {
+object FormattedLiterals {
 
-  implicit class AnsiHelper(val sc: StringContext) extends AnyVal {
-    def esc(args: Any*): String = {
-      val p = AnsiParser.parseAll(AnsiParser.content, sc.standardInterpolator(identity, args))
+  implicit class FormattedHelper(val sc: StringContext) extends AnyVal {
+    def ansi(args: Any*): String = {
+      val p = FLParser.parseAll(FLParser.content, sc.standardInterpolator(identity, args))
       val sb = new StringBuilder
       p.get.format(Codes(), sb)
       sb.toString()
     }
   }
 
-  object AnsiParser extends RegexParsers {
+  object FLParser extends RegexParsers {
     override def skipWhitespace = false
 
     val BACKSLASH: Parser[String] = """\"""
@@ -37,14 +37,14 @@ object Ansi {
 
     lazy val text: Parser[StringExp] = raw_text ^^ (StringExp apply _)
 
-    lazy val content: Parser[AnsiExp] = (command | escapedBS | text).* ^^ (CompoundExp apply _)
+    lazy val content: Parser[FLExp] = (command | escapedBS | text).* ^^ (CompoundExp apply _)
   }
 
-  sealed trait AnsiExp {
+  sealed trait FLExp {
     def format(c: Codes, sb: StringBuilder)
   }
 
-  case class StringExp(content: String) extends AnsiExp {
+  case class StringExp(content: String) extends FLExp {
     def format(c: Codes, sb: StringBuilder) {
       sb append content
     }
@@ -60,7 +60,7 @@ object Ansi {
     "cyan" -> 6,
     "white" -> 7)
 
-  case class CommandExp(command: String, content: AnsiExp) extends AnsiExp {
+  case class CommandExp(command: String, content: FLExp) extends FLExp {
     def format(c: Codes, sb: StringBuilder) {
       command match {
         case "bold" =>
@@ -92,7 +92,7 @@ object Ansi {
     }
   }
 
-  case class CompoundExp(children: Seq[AnsiExp]) extends AnsiExp {
+  case class CompoundExp(children: Seq[FLExp]) extends FLExp {
     def format(c: Codes, sb: StringBuilder) {
       for(ch <- children) ch.format(c, sb)
     }
