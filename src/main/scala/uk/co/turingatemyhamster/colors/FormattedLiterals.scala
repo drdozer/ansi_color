@@ -8,11 +8,34 @@ import scala.util.parsing.combinator.RegexParsers
 object FormattedLiterals {
 
   implicit class FormattedHelper(val sc: StringContext) extends AnyVal {
-    def ansi(args: Any*): String = {
-      val p = FLParser.parseAll(FLParser.content, sc.standardInterpolator(identity, args))
+    private def parseAndFormat(fmt: Formatter)(args: Seq[Any]): String = {
+      val ipl = sc.standardInterpolator(identity, args)
+      val p = FLParser.parseAll(FLParser.content, ipl)
       val sb = new StringBuilder
-      p.get.format(Codes(), sb)
+      fmt.format(p.get, Codes(), sb)
       sb.toString()
+    }
+    
+    def ansi(args: Any*): String = parseAndFormat(AnsiFormatter)(args)
+    
+    def html(args: Any*): String = parseAndFormat(HtmlFormatter)(args)
+    
+    def irc(args: Any*): String = parseAndFormat(IrcFormatter)(args)
+  }
+  
+  trait Formatter {
+    def format(ce: CommandExp, c: Codes, sb: StringBuilder): Unit
+
+    def format(se: StringExp, c: Codes, sb: StringBuilder): Unit = sb append se.content
+
+    def format(ce: CompoundExp, c: Codes, sb: StringBuilder): Unit = for(ch <- ce.children) format(ch, c, sb)
+    
+    def format(fle: FLExp, c: Codes, sb: StringBuilder): Unit = {
+      fle match {
+        case se: StringExp => format(se, c, sb)
+        case ce: CommandExp => format(ce, c, sb)
+        case ce: CompoundExp => format(ce, c, sb)
+      }
     }
   }
 
@@ -40,61 +63,121 @@ object FormattedLiterals {
     lazy val content: Parser[FLExp] = (command | escapedBS | text).* ^^ (CompoundExp apply _)
   }
 
-  sealed trait FLExp {
-    def format(c: Codes, sb: StringBuilder)
-  }
+  sealed trait FLExp
 
-  case class StringExp(content: String) extends FLExp {
-    def format(c: Codes, sb: StringBuilder) {
-      sb append content
+  case class StringExp(content: String) extends FLExp
+  case class CommandExp(command: String, content: FLExp) extends FLExp
+  case class CompoundExp(children: Seq[FLExp]) extends FLExp
+
+  object AnsiFormatter extends Formatter {
+    private val cCodes = Map(
+      "black" -> 0,
+      "red" -> 1,
+      "green" -> 2,
+      "yellow" -> 3,
+      "blue" -> 4,
+      "magenta" -> 5,
+      "cyan" -> 6,
+      "white" -> 7)
+
+    override def format(ce: CommandExp, c: Codes, sb: StringBuilder) = ce.command match {
+      case "bold" =>
+        sb append "\u001b[1m"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "\u001b[22m"
+      case "italic" =>
+        sb append "\u001b[3m"
+        format(ce.content, c.copy(italic = true), sb)
+        sb append "\u001b[23m"
+      case "Underline" =>
+        sb append "\u001b[4m"
+        format(ce.content, c.copy(underline = true), sb)
+        sb append "\u001b[24m"
+      case "blink" =>
+        sb append "\u001b[5m"
+        format(ce.content, c.copy(blink = true), sb)
+        sb append "\u001b[25m"
+      case "reverse" =>
+        sb append "\u001b[7m"
+        format(ce.content, c.copy(blink = true), sb)
+        sb append "\u001b[27m"
+      case color =>
+        val cCode = cCodes(color)
+        sb append s"\u001b[3${cCode}m"
+        format(ce.content, c.copy(color = cCode), sb)
+        sb append s"\u001b[3${c.color}m"
     }
   }
 
-  val cCodes = Map(
-    "black" -> 0,
-    "red" -> 1,
-    "green" -> 2,
-    "yellow" -> 3,
-    "blue" -> 4,
-    "magenta" -> 5,
-    "cyan" -> 6,
-    "white" -> 7)
-
-  case class CommandExp(command: String, content: FLExp) extends FLExp {
-    def format(c: Codes, sb: StringBuilder) {
-      command match {
-        case "bold" =>
-          sb append "\u001b[1m"
-          content.format(c.copy(bold = true), sb)
-          sb append "\u001b[22m"
-        case "italic" =>
-          sb append "\u001b[3m"
-          content.format(c.copy(italic = true), sb)
-          sb append "\u001b[23m"
-        case "Underline" =>
-          sb append "\u001b[4m"
-          content.format(c.copy(underline = true), sb)
-          sb append "\u001b[24m"
-        case "blink" =>
-          sb append "\u001b[5m"
-          content.format(c.copy(blink = true), sb)
-          sb append "\u001b[25m"
-        case "reverse" =>
-          sb append "\u001b[7m"
-          content.format(c.copy(blink = true), sb)
-          sb append "\u001b[27m"
-        case color =>
-          val cCode = cCodes(color)
-          sb append s"\u001b[3${cCode}m"
-          content.format(c.copy(color = cCode), sb)
-          sb append s"\u001b[3${c.color}m"
-      }
+  object HtmlFormatter extends Formatter {
+    override def format(ce: CommandExp, c: Codes, sb: StringBuilder) = ce.command match {
+      case "bold" =>
+        sb append "<b>"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "</b>"
+      case "italic" =>
+        sb append "<i>"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "</i>"
+      case "Underline" =>
+        sb append "<u>"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "</u>"
+      case "blink" =>
+        sb append "<blink>"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "</blink>"
+      case "reverse" => // noop in html
+        format(ce.content, c.copy(bold = true), sb)
+      case color =>
+        sb append s"<span style='color:$color'>"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "</span>"
     }
   }
 
-  case class CompoundExp(children: Seq[FLExp]) extends FLExp {
-    def format(c: Codes, sb: StringBuilder) {
-      for(ch <- children) ch.format(c, sb)
+  object IrcFormatter extends Formatter {
+    private val cCodes = Map(
+      "white" -> 0,
+      "black" -> 1,
+      "blue" -> 2,
+      "green" -> 3,
+      "red" -> 4,
+      "brown" -> 5,
+      "purple" -> 6,
+      "orange" -> 7,
+      "yellow" -> 8,
+      "lime" -> 9,
+      "teal" -> 10,
+      "cyan" -> 11,
+      "royal" -> 12,
+      "pink" -> 13,
+      "grey" -> 14,
+      "silver" -> 15)
+
+
+    override def format(ce: CommandExp, c: Codes, sb: StringBuilder) = ce.command match {
+      case "bold" =>
+        sb append "\u0002"
+        format(ce.content, c.copy(bold = true), sb)
+        sb append "\u0002"
+      case "italic" =>
+        sb append "\u001d"
+        format(ce.content, c.copy(italic = true), sb)
+        sb append "\u001d"
+      case "Underline" =>
+        sb append "\u001f"
+        format(ce.content, c.copy(underline = true), sb)
+        sb append "\u001f"
+      case "blink" => // noop
+        format(ce.content, c.copy(blink = true), sb)
+      case "reverse" => // noop
+        format(ce.content, c.copy(blink = true), sb)
+      case color =>
+        val cCode = cCodes(color)
+        sb append f"\u0003$cCode%02d\u0003"
+        format(ce.content, c.copy(color = cCode), sb)
+        sb append f"\u0003${c.color}\u0003"
     }
   }
 
